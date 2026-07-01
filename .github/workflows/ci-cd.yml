@@ -4,6 +4,10 @@ on:
   push:
     branches: [staging, main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -23,8 +27,63 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://localhost/test
+      JWT_SECRET: dummy-ci-secret
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Installer les dependances
+        run: npm ci
+        working-directory: backend
+
+      - name: Lancer les tests
+        run: npm test
+        working-directory: backend
+
+  gitleaks-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: gitleaks.toml
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - uses: github/codeql-action/analyze@v3
+
+      - name: Bloquer si CodeQL trouve une faille High/Critical
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 15
+          ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?ref=${{ github.ref }}&state=open" \
+            --jq '[.[] | select(.rule.security_severity_level == "high" or .rule.security_severity_level == "critical")] | length')
+          echo "Alertes High/Critical detectees : $ALERTS"
+          if [ "$ALERTS" -gt 0 ]; then
+            echo "CodeQL a detecte des vulnerabilites High/Critical. Blocage du pipeline."
+            exit 1
+          fi
 
   scan-image:
     needs: [test, changes]
@@ -49,6 +108,11 @@ jobs:
           image-ref: backend:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: '1'
+
+      - name: Analyse SBOM via Composite Action
+        uses: ./.github/actions/trivy-scan
+        with:
+          sbom-path: sbom.cdx.json
 
       - name: Exporter l'image en fichier tar
         run: docker save backend:${{ github.sha }} -o backend-image.tar
@@ -78,6 +142,7 @@ jobs:
 
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Tag et push
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -85,10 +150,87 @@ jobs:
           docker tag backend:${{ github.sha }} ${IMAGE_NAME}:${{ github.sha }}
           docker push ${IMAGE_NAME}:${{ github.sha }}
 
+  deploy-frontend:
+    needs: [test, gitleaks-ci, codeql, scan-image, publish]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success' &&
+      needs.gitleaks-ci.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      needs.scan-image.result != 'failure' &&
+      needs.publish.result != 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
   deploy-backend:
-    needs: [test]
-    if: github.ref == 'refs/heads/main'
+    needs: [test, gitleaks-ci, codeql, scan-image, publish]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success' &&
+      needs.gitleaks-ci.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      needs.scan-image.result != 'failure' &&
+      needs.publish.result != 'failure'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - run: echo "Tout vas bien !"
+      - uses: actions/checkout@v4
+
+      - name: Installer SOPS et Vercel CLI
+        run: |
+          SOPS_VERSION=$(curl -s https://api.github.com/repos/getsops/sops/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
+          curl -Lo sops "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          chmod +x sops
+          sudo mv sops /usr/local/bin/
+          sudo curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          npm install -g vercel
+
+      - name: Dechiffrer les secrets en memoire
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          sops -d .github/secrets-prod.yaml > /dev/shm/secrets.yaml
+          DATABASE_URL=$(yq '.DATABASE_URL' /dev/shm/secrets.yaml)
+          JWT_SECRET=$(yq '.JWT_SECRET' /dev/shm/secrets.yaml)
+          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$JWT_SECRET"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+          rm -f /dev/shm/secrets.yaml
+
+      - name: Deployer sur Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel deploy --prod --token=$VERCEL_TOKEN \
+            -e DATABASE_URL="$DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" > deploy_url.txt
+          echo "PROD_URL=$(cat deploy_url.txt)" >> "$GITHUB_ENV"
+
+      - name: Healthcheck production
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/health")
+          echo "Statut recu : $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Healthcheck echoue : l'API ne repond pas correctement."
+            exit 1
+          fi
