@@ -149,7 +149,7 @@ Chaque job ne doit disposer que des droits strictement nécessaires à sa tâche
 * **`test`** exécute réellement `npm ci` puis `npm test` (auparavant un simple `checkout` sans rien exécuter), avec des variables d'environnement factices (`DATABASE_URL`, `JWT_SECRET`) pour que le healthcheck applicatif passe en CI sans dépendre des vrais secrets de production. Cache npm actif via `actions/setup-node`.
 * **`gitleaks-ci`** : nouveau job, historique complet récupéré (`fetch-depth: 0`), aucun `continue-on-error` sur cette étape.
 * **`codeql`** : nouveau job, analyse statique du code JavaScript, `security-events: write` isolé localement à ce job (pas au workflow entier).
-* **Chaînage** : `deploy-backend` dépend désormais de `test`, `gitleaks-ci` **et** `codeql` — un seul échec bloque tout déploiement.
+* **Chaînage** : `deploy-backend` et `deploy-frontend` dépendent désormais de `test`, `gitleaks-ci` **et** `codeql` — un seul échec bloque tout déploiement.
 
 ### Deux bugs applicatifs corrigés au passage
 
@@ -158,7 +158,45 @@ En branchant les vrais tests dans la CI, deux problèmes déjà corrigés locale
 * Absence de `express.static(...)` pour servir `frontend/index.html` (le test e2e recevait un 404).
 * `app.listen()` s'exécutait à chaque `require()` du module (y compris depuis les tests), provoquant un `EADDRINUSE` dès que deux suites de tests s'enchaînaient. Corrigé en le conditionnant à `require.main === module`, pour qu'il ne s'exécute qu'en lancement direct (`node src/app.js`), jamais quand le fichier est importé par un test.
 
-## 9. Installation et utilisation de l'application
+## 9. CD Frontend — GitHub Pages — Bloc 7 ✅
+
+### Principe
+
+L'API moderne d'artefacts de déploiement GitHub Pages évite de committer le résultat d'un build sur une branche dédiée (`gh-pages`), ce qui garde l'historique Git propre. L'authentification se fait via OIDC, sans jeton stocké à l'avance.
+
+### Ce qui a été mis en place
+
+* Source des Pages configurée sur **GitHub Actions** (`Settings > Pages > Build and deployment`).
+* Job `deploy-frontend` : dépend de `test`, `gitleaks-ci`, `codeql` ; ne s'exécute que sur `main`.
+* Permissions dédiées `pages: write` et `id-token: write`, isolées à ce job.
+* `actions/upload-pages-artifact` (packageant `frontend/`) puis `actions/deploy-pages`.
+
+## 10. CD Backend — Vercel — Bloc 8 ✅
+
+### Principe
+
+Le déploiement backend s'orchestre en ligne de commande depuis GitHub Actions. Les secrets de production ne doivent jamais être écrits en clair sur le disque du runner : le déchiffrement doit rester entièrement en mémoire.
+
+### Ce qui a été mis en place
+
+* Job `deploy-backend` : installe `sops`, `yq` et le CLI Vercel.
+* Déchiffrement de `.github/secrets-prod.yaml` (clé `SOPS_AGE_KEY`) directement dans `/dev/shm` (système de fichiers en RAM), jamais sur le disque physique du runner ; le fichier déchiffré est supprimé explicitement juste après extraction des valeurs.
+* Valeurs extraites masquées dans les logs (`::add-mask::`) avant d'être exposées comme variables d'environnement du job.
+* Déploiement via `vercel pull` + `vercel deploy --prod`, secrets injectés directement dans la commande.
+* URL de production capturée dans `$GITHUB_ENV` (`PROD_URL`), réutilisée au Bloc 9.
+
+## 11. Robustesse — concurrence et healthcheck — Bloc 9 ✅
+
+### Principe
+
+Un `concurrency group` évite de gaspiller des ressources sur un déploiement devenu obsolète si un nouveau commit arrive entre-temps. Un healthcheck post-déploiement confirme que l'application répond réellement, ce qui est différent de constater que la commande de déploiement s'est juste terminée sans erreur.
+
+### Ce qui a été mis en place
+
+* `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` avec `cancel-in-progress: true`, au niveau du workflow entier : un nouveau push sur une branche annule automatiquement le run précédent encore actif sur **cette même branche** (le `github.ref` isole `staging` de `main`, aucune interférence entre les deux).
+* Étape finale de `deploy-backend` : requête `curl` vers `$PROD_URL/api/health`, le job échoue si la réponse n'est pas `200`.
+
+## 12. Installation et utilisation de l'application
 
 ### Prérequis
 
@@ -192,7 +230,7 @@ cd backend
 docker build -t backend:test .
 ```
 
-## 10. Avancement du projet
+## 13. Avancement du projet
 
 - [x] **Bloc 1** — Gouvernance Git (branches, branch protection, environment `production`, squelette du workflow)
 - [x] **Bloc 2** — Sécurité locale / Shift Left (hook pre-commit, règles gitleaks personnalisées)
@@ -200,11 +238,11 @@ docker build -t backend:test .
 - [x] **Bloc 4** — Conteneurisation du backend (Dockerfile multi-stage durci, SBOM, scan Trivy, publication GHCR)
 - [x] **Bloc 5** — Composite Action Trivy (analyse SBOM réutilisable, politique de sévérité différenciée)
 - [x] **Bloc 6** — Pipeline CI principal durci (tests réels, gitleaks en CI, CodeQL, chaînage des jobs de sécurité)
-- [ ] **Bloc 7** — CD Frontend (GitHub Pages via artefacts de déploiement)
-- [ ] **Bloc 8** — CD Backend (Vercel + déchiffrement SOPS au runtime)
-- [ ] **Bloc 9** — Robustesse (concurrency, healthcheck post-déploiement)
+- [x] **Bloc 7** — CD Frontend (GitHub Pages via artefacts de déploiement)
+- [x] **Bloc 8** — CD Backend (Vercel + déchiffrement SOPS au runtime)
+- [x] **Bloc 9** — Robustesse (concurrency, healthcheck post-déploiement)
 - [ ] **Bloc 10** — Livrables finaux
 
-## 11. Livrables
+## 14. Livrables
 
 À déposer sur Moodle en fin de projet : un fichier texte contenant l'URL de production Vercel, l'URL GitHub Pages, et l'URL du dépôt GitHub public, accompagné de tout fichier jugé utile (captures d'écran, scripts).

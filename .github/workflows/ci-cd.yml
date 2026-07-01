@@ -4,6 +4,10 @@ on:
   push:
     branches: [staging, main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -67,6 +71,19 @@ jobs:
           languages: javascript
 
       - uses: github/codeql-action/analyze@v3
+
+      - name: Bloquer si CodeQL trouve une faille High/Critical
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 15
+          ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?ref=${{ github.ref }}&state=open" \
+            --jq '[.[] | select(.rule.security_severity_level == "high" or .rule.security_severity_level == "critical")] | length')
+          echo "Alertes High/Critical detectees : $ALERTS"
+          if [ "$ALERTS" -gt 0 ]; then
+            echo "CodeQL a detecte des vulnerabilites High/Critical. Blocage du pipeline."
+            exit 1
+          fi
 
   scan-image:
     needs: [test, changes]
@@ -134,8 +151,15 @@ jobs:
           docker push ${IMAGE_NAME}:${{ github.sha }}
 
   deploy-frontend:
-    needs: [test, gitleaks-ci, codeql]
-    if: github.ref == 'refs/heads/main'
+    needs: [test, gitleaks-ci, codeql, scan-image, publish]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success' &&
+      needs.gitleaks-ci.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      needs.scan-image.result != 'failure' &&
+      needs.publish.result != 'failure'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -154,8 +178,15 @@ jobs:
         uses: actions/deploy-pages@v4
 
   deploy-backend:
-    needs: [test, gitleaks-ci, codeql]
-    if: github.ref == 'refs/heads/main'
+    needs: [test, gitleaks-ci, codeql, scan-image, publish]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success' &&
+      needs.gitleaks-ci.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      needs.scan-image.result != 'failure' &&
+      needs.publish.result != 'failure'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -194,3 +225,12 @@ jobs:
           vercel deploy --prod --token=$VERCEL_TOKEN \
             -e DATABASE_URL="$DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" > deploy_url.txt
           echo "PROD_URL=$(cat deploy_url.txt)" >> "$GITHUB_ENV"
+
+      - name: Healthcheck production
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/api/health")
+          echo "Statut recu : $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Healthcheck echoue : l'API ne repond pas correctement."
+            exit 1
+          fi
