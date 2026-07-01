@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSecOps Lab</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f4f6f9; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h1 { color: #24292e; margin-top: 0; }
+        h3 { color: #0366d6; border-bottom: 2px solid #eaecef; padding-bottom: 5px; }
+        input, button { padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid #0366d6; font-size: 14px; }
+        input { width: 300px; max-width: 100%; }
+        button { background: #2ea44f; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2c974b; }
+        .danger-zone { border-left: 5px solid #cb2431; }
+        pre { background: #f6f8fa; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Plateforme d'Entraînement DevSecOps</h1>
+        <p>Ce squelette applicatif statique est configuré pour interagir avec votre API Node.js distante.</p>
+        
+        <label for="backendUrl"><strong>URL de l'API Backend (Vercel) :</strong></label><br>
+        <input type="text" id="backendUrl" placeholder="https://votre-api.vercel.app" oninput="saveUrl()">
+        <p style="font-size: 12px; color: #666;">Exemple : <em>https://securewallet-backend.vercel.app</em> (L'URL est sauvegardée localement dans votre navigateur).</p>
+    </div>
+
+    <div class="card">
+        <h3>Diagnostic d'Infrastructure</h3>
+        <button onclick="testRoute('/api/health')">Tester la route Healthcheck</button>
+        <p style="font-size: 13px;">Doit renvoyer <code style="color: green;">200 OK</code> si les secrets SOPS/Age sont correctement injectés en mémoire RAM par Vercel.</p>
+    </div>
+
+    <div class="card danger-zone">
+        <h3>Laboratoire d'Exploitation (Failles Applicatives)</h3>
+        <p style="color: #cb2431; font-weight: bold;">⚠️ Zone de démonstration pour la soutenance de TP.</p>
+        
+        <h4>1. Test de Diagnostic Réseau (Route vulnérable CodeQL)</h4>
+        <input type="text" id="pingIp" value="8.8.8.8" placeholder="Ex: 8.8.8.8 ou 8.8.8.8 ; cat /etc/passwd">
+        <button onclick="testPing()">Exécuter le Ping</button>
+
+        <h4>2. Personnalisation du Profil (Route vulnérable XSS)</h4>
+        <input type="text" id="xssName" value="John Doe" placeholder="Ex: <script>alert('Hacked')</script>">
+        <button onclick="testWelcome()">Générer la page</button>
+    </div>
+
+    <div class="card">
+        <h3>Console de Sortie de l'API</h3>
+        <pre id="apiConsole">En attente d'une requête vers le backend...</pre>
+    </div>
+
+    <script>
+        document.getElementById('backendUrl').value = localStorage.getItem('s_backend_url') || '';
+
+        function saveUrl() {
+            localStorage.setItem('s_backend_url', document.getElementById('backendUrl').value);
+        }
+
+        function getBackendUrl() {
+            const url = document.getElementById('backendUrl').value.trim();
+            if (!url) {
+                alert("Veuillez d'abord renseigner l'URL de votre API Vercel dans le premier bloc !");
+                throw new Error("URL manquante");
+            }
+            // Retire le slash final si présent pour éviter les doubles slashes //
+            return url.replace(/\/$/, "");
+        }
+
+        function printConsole(data) {
+            document.getElementById('apiConsole').innerText = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
+        }
+
+        function testRoute(endpoint) {
+            const baseUrl = getBackendUrl();
+            printConsole("Requête en cours vers " + baseUrl + endpoint + " ...");
+            
+            fetch(baseUrl + endpoint)
+                .then(res => {
+                    if (!res.ok) throw new Error("HTTP Error " + res.status);
+                    return res.json();
+                })
+                .then(data => printConsole(data))
+                .catch(err => printConsole("Erreur de connexion : " + err.message + "\n\nAvez-vous pensé à activer le package 'cors' sur votre backend Express ?"));
+        }
+
+        function testPing() {
+            const baseUrl = getBackendUrl();
+            const ip = encodeURIComponent(document.getElementById('pingIp').value);
+            printConsole("Analyse réseau en cours via l'API...");
+            
+            fetch(baseUrl + "/api/debug-ping?ip=" + ip)
+                .then(res => res.json())
+                .then(data => printConsole(data))
+                .catch(err => printConsole("Erreur : " + err.message));
+        }
+
+        function testWelcome() {
+            const baseUrl = getBackendUrl();
+            const name = document.getElementById('xssName').value;
+            // Ouverture dans un nouvel onglet pour exécuter le potentiel script XSS (Reflected XSS)
+            window.open(baseUrl + "/api/welcome?name=" + encodeURIComponent(name), '_blank');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+name: 'Trivy SBOM Scan'
+description: 'Analyse de sécurité stricte sur SBOM'
+inputs:
+  sbom-path:
+    description: 'Chemin vers le fichier CycloneDX JSON'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Avertissements (HIGH, MEDIUM)
+      shell: bash
+      # exit-code 0 = Ne fait pas échouer le pipeline. Ajout direct au résumé du job.
+      run: |
+        trivy sbom "${{ inputs.sbom-path }}" --severity HIGH,MEDIUM --exit-code 0 --format table >> $GITHUB_STEP_SUMMARY
+    
+    - name: Arrêt critique (CRITICAL)
+      shell: bash
+      # exit-code 1 = Fait échouer l'action et bloque le pipeline.
+      run: |
+        trivy sbom "${{ inputs.sbom-path }}" --severity CRITICAL --exit-code 1

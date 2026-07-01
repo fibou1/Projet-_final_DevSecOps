@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Application Squelette
 
 ## Description
@@ -40,3 +41,4 @@ npm start
 ```
 
 L'application sera accessible depuis votre navigateur à l'adresse suivante : `http://localhost:3000`.
+=======
