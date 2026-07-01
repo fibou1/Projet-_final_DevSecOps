@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { execFile } = require('child_process');
 const cors = require('cors');   // <-- ligne manquante
+const rateLimit = require('express-rate-limit');
 
 
 const app = express();
@@ -27,10 +28,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Regex stricte : uniquement une adresse IPv4 valide (aucun caractère de shell possible)
+// Regex stricte : uniquement une adresse IPv4 valide (aucun caractere de shell possible)
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
 
-app.get('/api/debug-ping', (req, res) => {
+// Limite de debit : cette route lance un process systeme (ping), on evite le deni de service
+const pingLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,              // 5 requetes max par IP et par minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requetes sur /api/debug-ping. Reessayez plus tard.' }
+});
+
+app.get('/api/debug-ping', pingLimiter, (req, res) => {
   const targetIp = req.query.ip || '127.0.0.1';
 
   if (!IPV4_REGEX.test(targetIp)) {
@@ -56,14 +66,14 @@ function escapeHtml(input) {
 }
 
 app.get('/api/welcome', (req, res) => {
-  const name = req.query.name || 'Invité';
+  const name = req.query.name || 'Invite';
   res.send(`<h1>Bienvenue ${escapeHtml(name)}</h1>`);
 });
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`Le serveur écoute activement sur le port ${PORT}`);
+    console.log(`Le serveur ecoute activement sur le port ${PORT}`);
   });
 }
 
