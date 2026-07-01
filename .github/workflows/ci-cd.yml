@@ -133,10 +133,64 @@ jobs:
           docker tag backend:${{ github.sha }} ${IMAGE_NAME}:${{ github.sha }}
           docker push ${IMAGE_NAME}:${{ github.sha }}
 
+  deploy-frontend:
+    needs: [test, gitleaks-ci, codeql]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
   deploy-backend:
     needs: [test, gitleaks-ci, codeql]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - run: echo "Tout vas bien !"
+      - uses: actions/checkout@v4
+
+      - name: Installer SOPS et Vercel CLI
+        run: |
+          SOPS_VERSION=$(curl -s https://api.github.com/repos/getsops/sops/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
+          curl -Lo sops "https://github.com/getsops/sops/releases/download/${SOPS_VERSION}/sops-${SOPS_VERSION}.linux.amd64"
+          chmod +x sops
+          sudo mv sops /usr/local/bin/
+          sudo curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          npm install -g vercel
+
+      - name: Dechiffrer les secrets en memoire
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          sops -d .github/secrets-prod.yaml > /dev/shm/secrets.yaml
+          DATABASE_URL=$(yq '.DATABASE_URL' /dev/shm/secrets.yaml)
+          JWT_SECRET=$(yq '.JWT_SECRET' /dev/shm/secrets.yaml)
+          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$JWT_SECRET"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+          rm -f /dev/shm/secrets.yaml
+
+      - name: Deployer sur Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          vercel deploy --prod --token=$VERCEL_TOKEN \
+            -e DATABASE_URL="$DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" > deploy_url.txt
+          echo "PROD_URL=$(cat deploy_url.txt)" >> "$GITHUB_ENV"
