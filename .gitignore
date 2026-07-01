@@ -1,2 +1,8 @@
 node_modules/
-npm-debug.log
+
+
+
+ops.txt
+backend/dist/
+frontend/dist/
+
