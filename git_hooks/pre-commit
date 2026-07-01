@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Pre-commit: validation en cours..."
+
+# 1. Lint des workflows GitHub Actions
+if ! actionlint .github/workflows/*.yml; then
+  echo "Pre-commit: erreur actionlint, commit refusé."
+  exit 1
+else 
+  echo "Pre-commit: actionlint OK :D "
+fi
+
+# 2. Scan gitleaks limité aux fichiers stagés (prêts à être commités)
+if ! gitleaks protect --staged --config gitleaks.toml -v; then
+  echo "Pre-commit: secret détecté par gitleaks, commit refusé."
+  exit 1
+else 
+  echo "Pre-commit: gitleaks OK :D "
+fi
+
+
+# 3. Blocage des fichiers sensibles par extension
+STAGED_FILES=$(git diff --cached --name-only)
+for f in $STAGED_FILES; do
+  if [[ "$f" == *.env || "$f" == *.pem || "$f" == *.key ]]; then
+    echo -e "\033[31mSécurité : Tentative de commit d'un fichier de configuration ou d'une clé en clair. Opération annulée.\033[0m"
+    exit 1
+  else
+    echo -e "\033[32mPre-commit: Aucun fichier sensible détecté. Commit autorisé !.\033[0m"
+  fi
+done
+ 
+echo "Pre-commit: OK"
+exit 0
+

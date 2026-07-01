@@ -1,0 +1,10 @@
+title = "gitleaks custom rules"
+
+[[rules]]
+id = "secwallet-token"
+description = "Jeton d'accès interne SECWALLET_"
+regex = '''SECWALLET_[A-Z0-9]{24}'''
+entropy = 3.5
+
+[extend]
+useDefault = true
