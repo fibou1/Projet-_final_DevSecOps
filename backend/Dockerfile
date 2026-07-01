@@ -10,6 +10,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER appuser
 EXPOSE 3000
 CMD ["node", "src/app.js"]
