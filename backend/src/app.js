@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const cors = require('cors');   // <-- ligne manquante
 
 
@@ -27,20 +27,37 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Regex stricte : uniquement une adresse IPv4 valide (aucun caractère de shell possible)
+const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+
 app.get('/api/debug-ping', (req, res) => {
   const targetIp = req.query.ip || '127.0.0.1';
 
-  exec(`ping -c 1 ${targetIp}`, (error, stdout, stderr) => {
+  if (!IPV4_REGEX.test(targetIp)) {
+    return res.status(400).json({ error: 'Adresse IP invalide.' });
+  }
+
+  // execFile (pas de shell) + arguments separes : aucune injection de commande possible
+  execFile('ping', ['-c', '1', targetIp], (error, stdout) => {
     if (error) {
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: 'Echec du ping.' });
     }
     res.status(200).json({ output: stdout });
   });
 });
 
+function escapeHtml(input) {
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 app.get('/api/welcome', (req, res) => {
   const name = req.query.name || 'Invité';
-  res.send(`<h1>Bienvenue ${name}</h1>`);
+  res.send(`<h1>Bienvenue ${escapeHtml(name)}</h1>`);
 });
 
 if (require.main === module) {
