@@ -3,7 +3,9 @@ name: CI/CD
 on:
   push:
     branches: [staging, main]
- 
+    paths:
+      - 'backend/**'
+
 permissions:
   contents: read
  
@@ -12,6 +14,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+  scan-image:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (local, non publiée)
+        run: docker build -t backend:${{ github.sha }} ./backend
+
+      - name: Générer le SBOM CycloneDX
+        uses: anchore/sbom-action@v0
+        with:
+          image: backend:${{ github.sha }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
+      - name: Scan Trivy (image)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: backend:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  publish:
+    needs: [scan-image]
+    if: success()
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Tag et push
+        run: |
+          docker tag backend:${{ github.sha }} ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
   deploy-backend:
     needs: [test]
     if: github.ref == 'refs/heads/main'

@@ -1,8 +1,8 @@
 const express = require('express');
 const path = require('path');
 const { exec } = require('child_process');
+const cors = require('cors');   // <-- ligne manquante
 
-const INTERNAL_TOKEN = "SECWALLET_ABCDE12345FGHIJ67890KLMN"; 
 
 const app = express();
 app.use(cors());
@@ -13,14 +13,14 @@ app.get('/api/health', (req, res) => {
   const isJwtConfigured = !!process.env.JWT_SECRET;
 
   if (!isDatabaseConfigured || !isJwtConfigured) {
-    return res.status(500).json({ 
-      status: "DOWN", 
-      error: "Configuration de sécurité manquante : variables d'environnement non détectées" 
+    return res.status(500).json({
+      status: "DOWN",
+      error: "Configuration de sécurité manquante : variables d'environnement non détectées"
     });
   }
 
-  res.status(200).json({ 
-    status: "UP", 
+  res.status(200).json({
+    status: "UP",
     timestamp: new Date(),
     vault_status: "CONNECTED_TO_PROD_SECRETS"
   });
