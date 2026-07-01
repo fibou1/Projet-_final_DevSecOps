@@ -1,21 +1,34 @@
 name: CI/CD
- 
+
 on:
   push:
     branches: [staging, main]
-    paths:
-      - 'backend/**'
 
 permissions:
   contents: read
- 
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
   scan-image:
-    needs: [test]
+    needs: [test, changes]
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +44,7 @@ jobs:
           output-file: sbom.cdx.json
 
       - name: Scan Trivy (image)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: backend:${{ github.sha }}
           severity: HIGH,CRITICAL
@@ -52,10 +65,11 @@ jobs:
         run: |
           docker tag backend:${{ github.sha }} ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
           docker push ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+
   deploy-backend:
     needs: [test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - run: echo "Tout vas bien  !"
+      - run: echo "Tout vas bien !"
