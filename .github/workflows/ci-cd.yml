@@ -50,6 +50,16 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
 
+      - name: Exporter l'image en fichier tar
+        run: docker save backend:${{ github.sha }} -o backend-image.tar
+
+      - name: Upload de l'image en artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: backend-image.tar
+          retention-days: 1
+
   publish:
     needs: [scan-image]
     if: success()
@@ -58,7 +68,14 @@ jobs:
       packages: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Télécharger l'artefact image
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-image
+
+      - name: Charger l'image Docker
+        run: docker load -i backend-image.tar
+
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Tag et push
