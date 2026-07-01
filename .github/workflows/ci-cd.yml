@@ -1,0 +1,21 @@
+name: CI/CD
+ 
+on:
+  push:
+    branches: [staging, main]
+ 
+permissions:
+  contents: read
+ 
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+  deploy-backend:
+    needs: [test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Tout vas bien  !"
