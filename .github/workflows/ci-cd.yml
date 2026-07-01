@@ -1,21 +1,52 @@
 name: CI/CD
- 
+
 on:
   push:
     branches: [staging, main]
- 
+
 permissions:
   contents: read
- 
+
 jobs:
+  # ================= JOB 1 : TESTS =================
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+  # ================= JOB 2 : DEPLOIEMENT BACKEND =================
   deploy-backend:
     needs: [test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
     steps:
-      - run: echo "Tout vas bien  !"
+      - run: echo "Tout vas biennnn  !"
+
+  # ================= JOB 3 : DEPLOIEMENT FRONTEND =================
+  deploy-frontend:
+    needs: [test] # Attend également que les tests passent
+    if: github.ref == 'refs/heads/main' # Uniquement sur la branche main (Production)
+    runs-on: ubuntu-latest
+    
+    # Permissions obligatoires pour OIDC et GitHub Pages
+    permissions:
+      pages: write
+      id-token: write
+      
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    steps:
+      - name: "Clonage du depot"
+        uses: actions/checkout@v4
+
+      - name: "Creation de l'artefact Pages"
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public # ATTENTION 💡 : D'après votre arborescence, vos fichiers HTML/index.html sont dans le dossier "public" et non "frontend".
+
+      - name: "Deploiement sur GitHub Pages"
+        id: deployment
+        uses: actions/deploy-pages@v4
