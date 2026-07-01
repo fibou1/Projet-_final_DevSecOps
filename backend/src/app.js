@@ -7,6 +7,7 @@ const cors = require('cors');   // <-- ligne manquante
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', '..', 'frontend')));
 
 app.get('/api/health', (req, res) => {
   const isDatabaseConfigured = !!process.env.DATABASE_URL;
@@ -42,7 +43,7 @@ app.get('/api/welcome', (req, res) => {
   res.send(`<h1>Bienvenue ${name}</h1>`);
 });
 
-if (process.env.NODE_ENV !== 'production' || process.env.DOCKER_RUN === 'true') {
+if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`Le serveur écoute activement sur le port ${PORT}`);
