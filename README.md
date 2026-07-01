@@ -10,6 +10,7 @@ Ce dépôt contient une application composée de deux parties :
 L'objectif du projet n'est pas de développer ces deux briques, mais de construire **autour d'elles** une chaîne CI/CD industrialisée et durcie : gouvernance Git stricte, sécurité appliquée le plus tôt possible dans le cycle de développement (Shift Left), gestion chiffrée des secrets, conteneurisation scannée, pipeline GitHub Actions avec contrôles bloquants, puis déploiement automatisé (frontend sur GitHub Pages, backend sur Vercel).
 
 Ce README documente, bloc par bloc, ce qui a été mis en place. Il est mis à jour au fur et à mesure de l'avancement du projet.
+on as dévisé le projet en 9 blocs, chacun correspondant à un objectif précis du sujet. Chaque bloc est validé par un [x] lorsqu'il est terminé et fonctionnel.
 
 ## 2. Architecture actuelle du dépôt
 
@@ -61,7 +62,7 @@ Le code de production doit être **techniquement validé** avant tout déploieme
   * Nombre de reviews requises ajusté selon la taille de l'équipe sur le projet (0 en solo, 1 dès qu'un collaborateur avec accès en écriture est disponible)
 * **Environment `production`** (`Settings > Environments`) : reçoit les secrets de déploiement (SOPS, Vercel).
 * **Workflow** `.github/workflows/ci-cd.yml` déclenché sur `push` vers `staging` et `main`, avec `permissions: contents: read` au niveau global (moindre privilège).
-
+![alt text](screen/mainprot.png)
 ## 4. Sécurité locale — Shift Left — Bloc 2 ✅
 
 ### Principe
@@ -157,7 +158,8 @@ En branchant les vrais tests dans la CI, deux problèmes déjà corrigés locale
 
 * Absence de `express.static(...)` pour servir `frontend/index.html` (le test e2e recevait un 404).
 * `app.listen()` s'exécutait à chaque `require()` du module (y compris depuis les tests), provoquant un `EADDRINUSE` dès que deux suites de tests s'enchaînaient. Corrigé en le conditionnant à `require.main === module`, pour qu'il ne s'exécute qu'en lancement direct (`node src/app.js`), jamais quand le fichier est importé par un test.
-
+exemple de test de codeQL
+![alt text](screen/codeQL.png)
 ## 9. CD Frontend — GitHub Pages — Bloc 7 ✅
 
 ### Principe
