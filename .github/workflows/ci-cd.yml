@@ -63,7 +63,8 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Tag et push
         run: |
-          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}/backend" | tr '[:upper:]' '[:lower:]')
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/${OWNER}/devsecops-backend"
           docker tag backend:${{ github.sha }} ${IMAGE_NAME}:${{ github.sha }}
           docker push ${IMAGE_NAME}:${{ github.sha }}
 
