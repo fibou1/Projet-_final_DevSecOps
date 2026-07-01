@@ -23,8 +23,50 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://localhost/test
+      JWT_SECRET: dummy-ci-secret
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Installer les dependances
+        run: npm ci
+        working-directory: backend
+
+      - name: Lancer les tests
+        run: npm test
+        working-directory: backend
+
+  gitleaks-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: gitleaks.toml
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - uses: github/codeql-action/analyze@v3
 
   scan-image:
     needs: [test, changes]
@@ -49,6 +91,11 @@ jobs:
           image-ref: backend:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: '1'
+
+      - name: Analyse SBOM via Composite Action
+        uses: ./.github/actions/trivy-scan
+        with:
+          sbom-path: sbom.cdx.json
 
       - name: Exporter l'image en fichier tar
         run: docker save backend:${{ github.sha }} -o backend-image.tar
@@ -78,6 +125,7 @@ jobs:
 
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Tag et push
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -86,7 +134,7 @@ jobs:
           docker push ${IMAGE_NAME}:${{ github.sha }}
 
   deploy-backend:
-    needs: [test]
+    needs: [test, gitleaks-ci, codeql]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production

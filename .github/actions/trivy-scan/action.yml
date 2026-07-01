@@ -1,0 +1,26 @@
+name: 'Trivy SBOM Scan'
+description: 'Analyse un SBOM CycloneDX avec Trivy : bloque uniquement sur CRITICAL, avertit sur HIGH/MEDIUM'
+
+inputs:
+  sbom-path:
+    description: 'Chemin vers le fichier SBOM CycloneDX JSON genere au prealable'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Installer Trivy
+      shell: bash
+      run: |
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.70.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.70.0
+
+    - name: Scan CRITICAL (bloquant)
+      shell: bash
+      run: |
+        trivy sbom "${{ inputs.sbom-path }}" --severity CRITICAL --exit-code 1
+
+    - name: Scan HIGH/MEDIUM (avertissement uniquement)
+      shell: bash
+      run: |
+        echo "### Résultat du scan SBOM (HIGH/MEDIUM)" >> "$GITHUB_STEP_SUMMARY"
+        trivy sbom "${{ inputs.sbom-path }}" --severity HIGH,MEDIUM --exit-code 0 --format table >> "$GITHUB_STEP_SUMMARY" || true
