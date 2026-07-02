@@ -1,12 +1,10 @@
-#![Header](https://capsule-render.vercel.app/api?type=waving&color=339933&height=200&section=header&text=DevSecOps%20Final%20Project&fontSize=40&animation=fadeIn) 
-Industrialisation, durcissement et architecture CI/CD
-
+![Header](https://capsule-render.vercel.app/api?type=waving&color=339933&height=200&section=header&text=DevSecOps%20Final%20Project&fontSize=40&animation=fadeIn) 
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=Fira+Code&size=22&pause=1000&color=339933&center=true&vCenter=true&width=600&lines=Pipeline+CI%2FCD+durci+et+securise;Shift+Left+%2B+SOPS+%2B+Trivy+%2B+CodeQL;Deploye+sur+Vercel+%2B+GitHub+Pages)](https://git.io/typing-svg) 
 
 ![CI/CD](https://github.com/fibou1/Projet-_final_DevSecOps/actions/workflows/ci-cd.yml/badge.svg)![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)![CodeQL](https://img.shields.io/badge/CodeQL-enabled-181717?logo=github&logoColor=white)![Trivy](https://img.shields.io/badge/Trivy-image%20%2B%20SBOM%20scan-1904DA?logo=aquasecuritysystems&logoColor=white)![Gitleaks](https://img.shields.io/badge/gitleaks-protected-yellow?logo=git&logoColor=white)![Secrets](https://img.shields.io/badge/secrets-SOPS%20%2B%20age-blueviolet)
 ![Backend](https://img.shields.io/badge/backend-Vercel-black?logo=vercel&logoColor=white)
 ![Frontend](https://img.shields.io/badge/frontend-GitHub%20Pages-222222?logo=githubpages&logoColor=white)
 
-![Header](https://capsule-render.vercel.app/api?type=waving&color=339933&height=200&section=header&text=DevSecOps%20Final%20Project&fontSize=40&animation=fadeIn)
 
 #### l'equipe de projet:
 #### NDZONGHAN Robert Melveen - M2 
@@ -16,6 +14,10 @@ Industrialisation, durcissement et architecture CI/CD
 lien github pages: https://fibou1.github.io/Projet-_final_DevSecOps/
 lien vercel: https://projet-final-dev-sec-ops.vercel.app 
 ```
+avant vous de commence voila un petite demo complet de ce projet :
+![Démo du pipeline CI/CD](screen/pipeline-demo.gif)
+
+
 ## 1. Contexte du projet
 
 Ce dépôt contient une application composée de deux parties :
