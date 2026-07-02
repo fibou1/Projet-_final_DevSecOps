@@ -167,8 +167,8 @@ Chaque job ne doit disposer que des droits strictement nécessaires à sa tâche
 
 * **`test`** exécute réellement `npm ci` puis `npm test` (auparavant un simple `checkout` sans rien exécuter), avec des variables d'environnement factices (`DATABASE_URL`, `JWT_SECRET`) pour que le healthcheck applicatif passe en CI sans dépendre des vrais secrets de production. Cache npm actif via `actions/setup-node`.
 * **`gitleaks-ci`** : nouveau job, historique complet récupéré (`fetch-depth: 0`), aucun `continue-on-error` sur cette étape.
-* **`codeql`** : nouveau job, analyse statique du code JavaScript, `security-events: write` isolé localement à ce job (pas au workflow entier).
-* **Chaînage** : `deploy-backend` et `deploy-frontend` dépendent désormais de `test`, `gitleaks-ci` **et** `codeql` — un seul échec bloque tout déploiement.
+* **`codeql`** : nouveau job, analyse statique du code JavaScript, `security-events: write` isolé localement à ce job (pas au workflow entier). Une étape supplémentaire interroge ensuite l'API GitHub Code Scanning et fait échouer le job (`exit 1`) si une alerte `High` ou `Critical` est ouverte sur le commit analysé — sans cette étape, `codeql-action/analyze` se contente d'uploader le rapport SARIF sans jamais bloquer le pipeline par lui-même.
+* **Chaînage** : `deploy-backend` et `deploy-frontend` dépendent désormais de `test`, `gitleaks-ci`, `codeql`, **ainsi que** `scan-image` et `publish` (condition `needs.scan-image.result != 'failure'` et `needs.publish.result != 'failure'`, avec `always()` pour ne pas bloquer si ces jobs sont simplement ignorés faute de changement backend). Un échec du scan Trivy sur l'image Docker bloque donc désormais aussi bien la publication GHCR que les deux déploiements — conforme à l'exigence du sujet sur ce point précis.
 
 
 ### Deux bugs applicatifs corrigés au passage
@@ -200,6 +200,7 @@ Le déploiement backend s'orchestre en ligne de commande depuis GitHub Actions. 
 
 ### Ce qui a été mis en place
 
+* **`backend/vercel.json`** : indispensable au bon fonctionnement du déploiement. Sans lui, Vercel déploie les fichiers du dossier `backend/` tel quel (mode statique) sans jamais exécuter `app.js`, ce qui renvoie une erreur `404` sur toutes les routes malgré un déploiement "réussi". La configuration `builds` + `routes` force Vercel à traiter `src/app.js` comme une fonction serverless (`@vercel/node`) et à y router l'intégralité des requêtes — cohérent avec le fait que `app.js` exporte déjà `module.exports = app` et ne lance `app.listen()` que si le fichier est exécuté directement (`require.main === module`).
 * Job `deploy-backend` : installe `sops`, `yq` et le CLI Vercel.
 * Déchiffrement de `.github/secrets-prod.yaml` (clé `SOPS_AGE_KEY`) directement dans `/dev/shm` (système de fichiers en RAM), jamais sur le disque physique du runner ; le fichier déchiffré est supprimé explicitement juste après extraction des valeurs.
 * Valeurs extraites masquées dans les logs (`::add-mask::`) avant d'être exposées comme variables d'environnement du job.
