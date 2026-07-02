@@ -1,5 +1,21 @@
-# Projet final DevSecOps — Industrialisation, durcissement et architecture CI/CD
+#![Header](https://capsule-render.vercel.app/api?type=waving&color=339933&height=200&section=header&text=DevSecOps%20Final%20Project&fontSize=40&animation=fadeIn) 
+Industrialisation, durcissement et architecture CI/CD
 
+
+![CI/CD](https://github.com/fibou1/Projet-_final_DevSecOps/actions/workflows/ci-cd.yml/badge.svg)![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)![CodeQL](https://img.shields.io/badge/CodeQL-enabled-181717?logo=github&logoColor=white)![Trivy](https://img.shields.io/badge/Trivy-image%20%2B%20SBOM%20scan-1904DA?logo=aquasecuritysystems&logoColor=white)![Gitleaks](https://img.shields.io/badge/gitleaks-protected-yellow?logo=git&logoColor=white)![Secrets](https://img.shields.io/badge/secrets-SOPS%20%2B%20age-blueviolet)
+![Backend](https://img.shields.io/badge/backend-Vercel-black?logo=vercel&logoColor=white)
+![Frontend](https://img.shields.io/badge/frontend-GitHub%20Pages-222222?logo=githubpages&logoColor=white)
+
+![Header](https://capsule-render.vercel.app/api?type=waving&color=339933&height=200&section=header&text=DevSecOps%20Final%20Project&fontSize=40&animation=fadeIn)
+
+#### l'equipe de projet:
+#### NDZONGHAN Robert Melveen - M2 
+#### Farid Talbi - M2
+#### Firas Bouricha - M1
+```
+lien github pages: https://fibou1.github.io/Projet-_final_DevSecOps/
+lien vercel: https://projet-final-dev-sec-ops.vercel.app 
+```
 ## 1. Contexte du projet
 
 Ce dépôt contient une application composée de deux parties :
@@ -83,17 +99,17 @@ En plus des règles par défaut de gitleaks (`useDefault = true`), une règle pe
 
 ### Preuve de fonctionnement en conditions réelles
 
-Ce hook a réellement bloqué, en cours de projet : un token `SECWALLET_` planté dans `backend/src/app.js`, et à deux reprises une tentative de commit accidentel de `ops.txt` (la clé privée `age` du Bloc 3). Aucun des deux n'a atteint le dépôt distant.
+Ce hook a réellement bloqué, en cours de projet : un token `SECWALLET_` planté dans `backend/src/app.js`, et à deux reprises une tentative de commit accidentel de `ops.txt` (avant la mettre dans .gitignore) (la clé privée `age` du Bloc 3). Aucun des deux n'a atteint le dépôt distant.
 
 ### Installation du hook (obligatoire pour chaque contributeur)
 
 Le dossier `.git/hooks/` n'est jamais envoyé sur GitHub (il n'est pas suivi par Git). Une copie du script est donc versionnée dans `git_hooks/pre-commit` :
-
+pour que ca marche il faut copier le hook dans `.git/hooks/` et lui donner les droits d'exécution, par exemple via :
 ```bash
 cp git_hooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
-
+![alt text](screen/precommit_terminal.png)
 ## 5. Gestion des secrets par enveloppe — Bloc 3 ✅
 
 ### Principe
@@ -152,6 +168,7 @@ Chaque job ne doit disposer que des droits strictement nécessaires à sa tâche
 * **`codeql`** : nouveau job, analyse statique du code JavaScript, `security-events: write` isolé localement à ce job (pas au workflow entier).
 * **Chaînage** : `deploy-backend` et `deploy-frontend` dépendent désormais de `test`, `gitleaks-ci` **et** `codeql` — un seul échec bloque tout déploiement.
 
+
 ### Deux bugs applicatifs corrigés au passage
 
 En branchant les vrais tests dans la CI, deux problèmes déjà corrigés localement s'étaient perdus pendant la réorganisation en `backend/`/`frontend/` et ont dû être réappliqués sur `backend/src/app.js` :
@@ -198,6 +215,13 @@ Un `concurrency group` évite de gaspiller des ressources sur un déploiement de
 * `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` avec `cancel-in-progress: true`, au niveau du workflow entier : un nouveau push sur une branche annule automatiquement le run précédent encore actif sur **cette même branche** (le `github.ref` isole `staging` de `main`, aucune interférence entre les deux).
 * Étape finale de `deploy-backend` : requête `curl` vers `$PROD_URL/api/health`, le job échoue si la réponse n'est pas `200`.
 
+#### test final de l'API en production avec githube pages et vercel: 
+
+
+![alt text](screen/testefinal.png)
+
+#### Run complet du pipeline CI/CD
+![alt text](screen/Run-CI-CD.png)
 ## 12. Installation et utilisation de l'application
 
 ### Prérequis
@@ -243,8 +267,5 @@ docker build -t backend:test .
 - [x] **Bloc 7** — CD Frontend (GitHub Pages via artefacts de déploiement)
 - [x] **Bloc 8** — CD Backend (Vercel + déchiffrement SOPS au runtime)
 - [x] **Bloc 9** — Robustesse (concurrency, healthcheck post-déploiement)
-- [ ] **Bloc 10** — Livrables finaux
 
-## 14. Livrables
 
-À déposer sur Moodle en fin de projet : un fichier texte contenant l'URL de production Vercel, l'URL GitHub Pages, et l'URL du dépôt GitHub public, accompagné de tout fichier jugé utile (captures d'écran, scripts).
