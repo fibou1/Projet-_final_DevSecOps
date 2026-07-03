@@ -6,7 +6,7 @@
 ![Frontend](https://img.shields.io/badge/frontend-GitHub%20Pages-222222?logo=githubpages&logoColor=white)
 
 
-#### l'equipe de projet:
+#### L'équipe de projet :
 #### NDZONGHAN Robert Melveen - M2 
 #### Farid Talbi - M2
 #### Firas Bouricha - M1
@@ -14,10 +14,26 @@
 lien github pages: https://fibou1.github.io/Projet-_final_DevSecOps/
 lien vercel: https://projet-final-dev-sec-ops.vercel.app 
 ```
-avant vous de commence voila un petite demo complet de ce projet :
+Avant de commencer, voici une petite démo complète de ce projet :
 ![Démo du pipeline CI/CD](screen/pipeline-demo.gif)
 
+## Table des matières
 
+- [1. Contexte du projet](#bloc-1)
+- [2. Architecture actuelle du dépôt](#bloc-2)
+- [3. Gouvernance Git — Bloc 1](#bloc-3)
+- [4. Sécurité locale — Shift Left — Bloc 2](#bloc-4)
+- [5. Gestion des secrets par enveloppe — Bloc 3](#bloc-5)
+- [6. Conteneurisation du backend — Bloc 4](#bloc-6)
+- [7. Composite Action — analyse SBOM — Bloc 5](#bloc-7)
+- [8. Pipeline CI principal durci — Bloc 6](#bloc-8)
+- [9. CD Frontend — GitHub Pages — Bloc 7](#bloc-9)
+- [10. CD Backend — Vercel — Bloc 8](#bloc-10)
+- [11. Robustesse — concurrence et healthcheck — Bloc 9](#bloc-11)
+- [12. Installation et utilisation de l'application](#bloc-12)
+- [13. Avancement du projet](#bloc-13)
+
+<a name="bloc-1"></a>
 ## 1. Contexte du projet
 
 Ce dépôt contient une application composée de deux parties :
@@ -28,8 +44,9 @@ Ce dépôt contient une application composée de deux parties :
 L'objectif du projet n'est pas de développer ces deux briques, mais de construire **autour d'elles** une chaîne CI/CD industrialisée et durcie : gouvernance Git stricte, sécurité appliquée le plus tôt possible dans le cycle de développement (Shift Left), gestion chiffrée des secrets, conteneurisation scannée, pipeline GitHub Actions avec contrôles bloquants, puis déploiement automatisé (frontend sur GitHub Pages, backend sur Vercel).
 
 Ce README documente, bloc par bloc, ce qui a été mis en place. Il est mis à jour au fur et à mesure de l'avancement du projet.
-on as dévisé le projet en 9 blocs, chacun correspondant à un objectif précis du sujet. Chaque bloc est validé par un [x] lorsqu'il est terminé et fonctionnel.
+On a divisé le projet en 10 blocs, chacun correspondant à un objectif précis du sujet. Chaque bloc est validé par un [x] lorsqu'il est terminé et fonctionnel.
 
+<a name="bloc-2"></a>
 ## 2. Architecture actuelle du dépôt
 
 ```
@@ -59,6 +76,7 @@ on as dévisé le projet en 9 blocs, chacun correspondant à un objectif précis
     └── secrets-prod.yaml           # Secrets de production, chiffrés par SOPS
 ```
 
+<a name="bloc-3"></a>
 ## 3. Gouvernance Git — Bloc 1 ✅
 
 ### Principe
@@ -81,6 +99,7 @@ Le code de production doit être **techniquement validé** avant tout déploieme
 * **Environment `production`** (`Settings > Environments`) : reçoit les secrets de déploiement (SOPS, Vercel).
 * **Workflow** `.github/workflows/ci-cd.yml` déclenché sur `push` vers `staging` et `main`, avec `permissions: contents: read` au niveau global (moindre privilège).
 ![alt text](screen/mainprot.png)
+<a name="bloc-4"></a>
 ## 4. Sécurité locale — Shift Left — Bloc 2 ✅
 
 ### Principe
@@ -101,17 +120,18 @@ En plus des règles par défaut de gitleaks (`useDefault = true`), une règle pe
 
 ### Preuve de fonctionnement en conditions réelles
 
-Ce hook a réellement bloqué, en cours de projet : un token `SECWALLET_` planté dans `backend/src/app.js`, et à deux reprises une tentative de commit accidentel de `ops.txt` (avant la mettre dans .gitignore) (la clé privée `age` du Bloc 3). Aucun des deux n'a atteint le dépôt distant.
+Ce hook a réellement bloqué, en cours de projet : un token `SECWALLET_` planté dans `backend/src/app.js`, et à deux reprises une tentative de commit accidentel de `ops.txt` (avant de le mettre dans `.gitignore`) (la clé privée `age` du Bloc 3). Aucun des deux n'a atteint le dépôt distant.
 
 ### Installation du hook (obligatoire pour chaque contributeur)
 
 Le dossier `.git/hooks/` n'est jamais envoyé sur GitHub (il n'est pas suivi par Git). Une copie du script est donc versionnée dans `git_hooks/pre-commit` :
-pour que ca marche il faut copier le hook dans `.git/hooks/` et lui donner les droits d'exécution, par exemple via :
+Pour que ça marche, il faut copier le hook dans `.git/hooks/` et lui donner les droits d'exécution, par exemple via :
 ```bash
 cp git_hooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 ![alt text](screen/precommit_terminal.png)
+<a name="bloc-5"></a>
 ## 5. Gestion des secrets par enveloppe — Bloc 3 ✅
 
 ### Principe
@@ -125,6 +145,7 @@ La philosophie GitOps interdit tout secret de production en clair dans le dépô
 * `.sops.yaml` définit la règle de chiffrement (`creation_rules`) associant ce fichier à la clé publique `age`.
 * La clé privée est stockée comme secret GitHub `SOPS_AGE_KEY`, dans l'environment `production` (jamais dans le code).
 
+<a name="bloc-6"></a>
 ## 6. Conteneurisation du backend — Bloc 4 ✅
 
 ### Principe
@@ -142,6 +163,7 @@ L'image Docker livrée en production ne doit contenir que le strict nécessaire 
 * **Transport de l'image entre jobs** : chaque job GitHub Actions tourne sur un runner isolé ; l'image construite dans `scan-image` est exportée (`docker save`), envoyée en artefact GitHub Actions, puis rechargée (`docker load`) dans le job `publish`.
 * **Publication conditionnelle sur GHCR** : uniquement si le scan est passé, avec un nom d'image fixe et systématiquement en minuscules (`ghcr.io/<owner>/devsecops-backend`) — le nom du dépôt lui-même contient des caractères invalides pour une référence Docker (mélange de majuscules et de séparateurs `-`/`_`).
 
+<a name="bloc-7"></a>
 ## 7. Composite Action — analyse SBOM — Bloc 5 ✅
 
 ### Principe
@@ -157,6 +179,7 @@ Une Composite Action regroupe plusieurs étapes dans une action réutilisable, a
   * Une vulnérabilité `HIGH` ou `MEDIUM` est seulement signalée dans le résumé du workflow (`$GITHUB_STEP_SUMMARY`), sans bloquer le pipeline.
 * Appelée depuis `scan-image` juste après la génération du SBOM, en plus (pas à la place) du scan d'image qui, lui, bloque déjà sur `HIGH` ou `CRITICAL`.
 
+<a name="bloc-8"></a>
 ## 8. Pipeline CI principal durci — Bloc 6 ✅
 
 ### Principe
@@ -177,8 +200,9 @@ En branchant les vrais tests dans la CI, deux problèmes déjà corrigés locale
 
 * Absence de `express.static(...)` pour servir `frontend/index.html` (le test e2e recevait un 404).
 * `app.listen()` s'exécutait à chaque `require()` du module (y compris depuis les tests), provoquant un `EADDRINUSE` dès que deux suites de tests s'enchaînaient. Corrigé en le conditionnant à `require.main === module`, pour qu'il ne s'exécute qu'en lancement direct (`node src/app.js`), jamais quand le fichier est importé par un test.
-exemple de test de codeQL
+Exemple de test de CodeQL.
 ![alt text](screen/codeQL.png)
+<a name="bloc-9"></a>
 ## 9. CD Frontend — GitHub Pages — Bloc 7 ✅
 
 ### Principe
@@ -192,6 +216,7 @@ L'API moderne d'artefacts de déploiement GitHub Pages évite de committer le r�
 * Permissions dédiées `pages: write` et `id-token: write`, isolées à ce job.
 * `actions/upload-pages-artifact` (packageant `frontend/`) puis `actions/deploy-pages`.
 
+<a name="bloc-10"></a>
 ## 10. CD Backend — Vercel — Bloc 8 ✅
 
 ### Principe
@@ -207,6 +232,7 @@ Le déploiement backend s'orchestre en ligne de commande depuis GitHub Actions. 
 * Déploiement via `vercel pull` + `vercel deploy --prod`, secrets injectés directement dans la commande.
 * URL de production capturée dans `$GITHUB_ENV` (`PROD_URL`), réutilisée au Bloc 9.
 
+<a name="bloc-11"></a>
 ## 11. Robustesse — concurrence et healthcheck — Bloc 9 ✅
 
 ### Principe
@@ -218,13 +244,14 @@ Un `concurrency group` évite de gaspiller des ressources sur un déploiement de
 * `concurrency: group: ${{ github.workflow }}-${{ github.ref }}` avec `cancel-in-progress: true`, au niveau du workflow entier : un nouveau push sur une branche annule automatiquement le run précédent encore actif sur **cette même branche** (le `github.ref` isole `staging` de `main`, aucune interférence entre les deux).
 * Étape finale de `deploy-backend` : requête `curl` vers `$PROD_URL/api/health`, le job échoue si la réponse n'est pas `200`.
 
-#### test final de l'API en production avec githube pages et vercel: 
+#### Test final de l'API en production avec GitHub Pages et Vercel :
 
 
 ![alt text](screen/testefinal.png)
 
 #### Run complet du pipeline CI/CD
 ![alt text](screen/Run-CI-CD.png)
+<a name="bloc-12"></a>
 ## 12. Installation et utilisation de l'application
 
 ### Prérequis
@@ -259,6 +286,7 @@ cd backend
 docker build -t backend:test .
 ```
 
+<a name="bloc-13"></a>
 ## 13. Avancement du projet
 
 - [x] **Bloc 1** — Gouvernance Git (branches, branch protection, environment `production`, squelette du workflow)
